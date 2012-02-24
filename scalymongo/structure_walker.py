@@ -29,7 +29,11 @@ class StructureWalker(object):
         not present in `structure`.
 
         """
-        _check_for_unknown_fields(body, structure, path)
+        # need to split all the keys in the body on dots
+        split_body = _split_keys_on_dots(body)
+
+        # just need to make sure the first arg is in the structure
+        _check_for_unknown_fields(split_body, structure, path)
 
         for field, sub_structure in structure.iteritems():
             if isclass(field):
@@ -37,14 +41,14 @@ class StructureWalker(object):
                 # For structures like {<TYPE>: {<STRUCT>}} iterate values
                 # in the body with keys of <TYPE> and verify each against
                 # <STRUCT>.
-                for key, value in body.iteritems():
+                for key, value in split_body.iteritems():
                     if isinstance(key, field_type):
                         self._recurse_or_validate_field(
                             value, sub_structure, _join(path, key))
 
-            if field in body:
+            if field in split_body:
                 self._recurse_or_validate_field(
-                    body[field], sub_structure, _join(path, field))
+                    split_body[field], sub_structure, _join(path, field))
 
     def _recurse_or_validate_field(self, value, sub_structure, path):
         if isinstance(sub_structure, list):
@@ -92,6 +96,25 @@ def _check_for_unknown_fields(body, structure, path):
         raise ValidationError(err)
 
 
+def _handle_dots_in_key(key, value):
+    """Create a dictionary out of the passed in key-value pair.
+
+    For each dot in the key, create one 'nesting' in the returned dictionary.
+
+    >>> _handle_dots_in_key('a.b.c', 1)
+    {'a': {'b': {'c': 1}}}
+
+    """
+    if '.' not in key:
+        return {key: value}
+
+    split_list = key.split('.', 1)
+    first = split_list[0]
+    rest = split_list[1]
+
+    return {first: _handle_dots_in_key(rest, value)}
+
+
 def _join(head, tail):
     """Join `head` and `tail` with a dot.
 
@@ -101,3 +124,21 @@ def _join(head, tail):
     if head is None:
         return tail
     return '{0}.{1}'.format(head, tail)
+
+
+def _split_keys_on_dots(body):
+    """Create nested dictionary structure from every key in ``body``.
+
+    Process passed in ``body``, creating an additional dictionary level
+    for each dot in every key.
+
+    >>> _split_keys_on_dots({'a.b.c': 1, 'd': 2})
+    {'a': {'b': {'c': 1}}, 'd': 2}
+
+    """
+    split_body = {}
+    for key, value in body.iteritems():
+        fixed_key, fixed_value = _handle_dots_in_key(key, value).popitem()
+        split_body[fixed_key] = fixed_value
+
+    return split_body

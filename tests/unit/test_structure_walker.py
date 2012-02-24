@@ -1,6 +1,10 @@
 from dingus import Dingus
 
-from scalymongo.structure_walker import StructureWalker
+from scalymongo.structure_walker import (
+    StructureWalker,
+    _handle_dots_in_key,
+    _split_keys_on_dots,
+)
 
 
 class BaseStructureWalker(object):
@@ -25,6 +29,24 @@ class WhenWalkingSimpleStructure(BaseStructureWalker):
 
     def should_visit_float(self):
         assert self.field_validator.calls('()', 'float', 1.1, float)
+
+
+class WhenWalkingStructureWithEmbeddedDictDottedKey(BaseStructureWalker):
+
+    @classmethod
+    def setup_class(self):
+        BaseStructureWalker.setup_class()
+        self.value = Dingus('value')
+        self.type = Dingus('type')
+        self.body = {'x.y.z': self.value}
+        self.structure = {'x': {'y': {'z': self.type}}}
+        self.structure_walker.walk_dict(self.body, self.structure)
+
+    def should_visit_x_y_z(self):
+        assert self.field_validator.calls('()', 'x.y.z', self.value, self.type)
+
+    def should_visit_exactly_one_field(self):
+        assert self.field_validator.calls('()').once()
 
 
 class WhenWalkingStructureWithEmbeddedDict(BaseStructureWalker):
@@ -107,3 +129,39 @@ class WhenWalkingStructureWithListOfDocuments(BaseStructureWalker):
     def should_visit_exactly_4(self):
         assert self.field_validator.calls(
             '()', 'x.1.b', self.value_1_b, self.type_b)
+
+
+class HandlingDotsInKeyBaseCase(object):
+
+    def setup(self):
+        self.returned = _handle_dots_in_key(self.key, self.value)
+
+    def should_return_expected_value(self):
+        assert self.returned == self.expected_value
+
+
+class WhenHandlingDotsInKey(HandlingDotsInKeyBaseCase):
+
+    key = 'a.b.c'
+    value = 1
+    expected_value = {'a': {'b': {'c': 1}}}
+
+
+class WhenHandlingDotsInKeyAndKeyHasNoDots(HandlingDotsInKeyBaseCase):
+
+    key = 'key'
+    value = 2
+    expected_value = {'key': 2}
+
+
+class WhenSplittingKeysOnDots(object):
+
+    def setup(self):
+        self.returned = _split_keys_on_dots({'a.b.c': 1, 'd': 2, 'e.f': 3})
+
+    def should_return_nested_dict(self):
+        assert self.returned == {
+            'a': {'b': {'c': 1}},
+            'd': 2,
+            'e': {'f': 3},
+        }

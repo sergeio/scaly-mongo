@@ -52,9 +52,22 @@ def when_validating_proper_embedded_dict_should_pass():
         'field': {'foo': 1, u'bar': 2}})
     doc.validate()
 
+def when_validating_proper_dotted_dict_should_pass():
+    doc = DocumentWithEmbeddedDictOfStringToInt({
+        'field.foo': 1, 'field.bar': 2})
+    doc.validate()
+
 def when_validating_document_with_string_mapped_to_float_should_fail_validation():
     doc = DocumentWithEmbeddedDictOfStringToInt({
         'field': {'foo': 1, u'bar': 2.3}})
+    assert_raises_with_message(
+        ValidationError,
+        "Position 'field.bar' was declared to be <type 'int'>, but encountered value 2.2999999999999998",
+        doc.validate)
+
+def when_validating_dotted_document_with_string_mapped_to_float_should_fail_validation():
+    doc = DocumentWithEmbeddedDictOfStringToInt({
+        'field.foo': 1, 'field.bar': 2.3})
     assert_raises_with_message(
         ValidationError,
         "Position 'field.bar' was declared to be <type 'int'>, but encountered value 2.2999999999999998",
